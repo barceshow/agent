@@ -30,6 +30,8 @@ type Config struct {
 	nodelay, interval, resend, nc int
 }
 
+var config *Config
+
 func main() {
 	log.SetLevel(log.DebugLevel)
 
@@ -146,7 +148,7 @@ func main() {
 			log.Println("nodelay parameters:", c.Int("nodelay"), c.Int("interval"), c.Int("resend"), c.Int("nc"))
 
 			//setup net param
-			config := &Config{
+			config = &Config{
 				listen:       c.String("listen"),
 				readDeadline: c.Duration("read-deadline"),
 				sockbuf:      c.Int("sockbuf"),
@@ -170,6 +172,9 @@ func main() {
 			// listeners
 			go tcpServer(config)
 			go udpServer(config)
+			
+			http.HandleFunc("/", websocketServer)
+			go http.ListenAndServe("localhost:8080", nil)
 
 			// wait forever
 			select {}
@@ -235,6 +240,17 @@ func udpServer(config *Config) {
 
 		// start a goroutine for every incoming connection for reading
 		go handleClient(conn, config)
+	}
+}
+
+func websocketServer(w http.ResponseWriter, r *http.Request) {
+	conn, err := websocketConn.NewWebsocketServerConn(w, r)
+	checkError(err)
+	handleClient(conn, config)
+	select {
+	case <-die:
+		return
+	default:
 	}
 }
 
