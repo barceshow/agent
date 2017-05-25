@@ -39,7 +39,11 @@ func (buf *Buffer) send(sess *Session, data []byte) {
 	}
 
 	// queue the data for sending
-	buf.pending <- data
+	select {
+	case buf.pending <- data:
+	default: // packet will be dropped if txqueuelen exceeds
+		log.WithFields(log.Fields{"userid": sess.UserId, "ip": sess.IP}).Warning("pending full")
+	}
 	return
 }
 
@@ -51,9 +55,6 @@ func (buf *Buffer) start() {
 		case data := <-buf.pending:
 			buf.raw_send(data)
 		case <-buf.ctrl: // receive session end signal
-			close(buf.pending)
-			// close the connection
-			buf.conn.Close()
 			return
 		}
 	}
@@ -77,9 +78,9 @@ func (buf *Buffer) raw_send(data []byte) bool {
 }
 
 // create a associated write buffer for a session
-func new_buffer(conn net.Conn, ctrl chan struct{}) *Buffer {
+func new_buffer(conn net.Conn, ctrl chan struct{}, txqueuelen int) *Buffer {
 	buf := Buffer{conn: conn}
-	buf.pending = make(chan []byte)
+	buf.pending = make(chan []byte, txqueuelen)
 	buf.ctrl = ctrl
 	buf.cache = make([]byte, packet.PACKET_LIMIT+2)
 	return &buf

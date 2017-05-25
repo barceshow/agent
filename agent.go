@@ -45,9 +45,10 @@ func agent(sess *Session, in chan []byte, out *Buffer) {
 			}
 
 			sess.PacketCount++
+			sess.PacketCount1Min++
 			sess.PacketTime = time.Now()
 
-			if result := proxy_user_request(sess, msg); result != nil {
+			if result := route(sess, msg); result != nil {
 				out.send(sess, result)
 			}
 			sess.LastPacketTime = sess.PacketTime
